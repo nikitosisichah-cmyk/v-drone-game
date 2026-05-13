@@ -1,200 +1,47 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>V MURDER DRONE - MOBILE ONLINE</title>
-    <style>
-        body { margin: 0; background: #000; color: #fff; overflow: hidden; font-family: 'Courier New', monospace; touch-action: none; }
-        canvas { display: block; width: 100vw; height: 100vh; }
-        
-        /* ГЛАВНОЕ МЕНЮ */
-        #menu { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle, #200, #000); z-index: 200; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
-        #menu h1 { color: red; font-size: 3rem; text-shadow: 0 0 20px #f00; margin-bottom: 10px; }
-        .btn { padding: 15px 40px; background: #f00; color: #fff; border: none; font-size: 1.5rem; cursor: pointer; border-radius: 5px; transition: 0.3s; }
-        .btn:hover { background: #b00; transform: scale(1.1); }
+// Замени весь блок управления (EventListeners) на этот:
 
-        /* МОБИЛЬНЫЙ ДЖОЙСТИК */
-        #joystick { position: absolute; bottom: 40px; left: 40px; width: 100px; height: 100px; background: rgba(255,255,255,0.2); border-radius: 50%; display: none; z-index: 150; }
-        #stick { position: absolute; top: 25px; left: 25px; width: 50px; height: 50px; background: #f00; border-radius: 50%; }
+let touchStartX = null;
 
-        #screamer { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 300; background: #000; }
-        #screamer img { width: 100%; height: 100%; object-fit: contain; }
-        #ui { position: absolute; top: 10px; left: 10px; z-index: 10; pointer-events: none; font-size: 12px; opacity: 0.7; }
-    </style>
-</head>
-<body>
-
-    <div id="menu">
-        <h1>V: THE DRONE</h1>
-        <p>НЕ ДАЙ ЕЙ ПОЙМАТЬ ТЕБЯ</p>
-        <button class="btn" onclick="startGame()">ИГРАТЬ</button>
-        <p style="margin-top:20px; font-size: 0.8rem;">PC: WASD + ПКМ | Mobile: Джойстик + Тап</p>
-    </div>
-
-    <div id="joystick"><div id="stick"></div></div>
-    <div id="ui">FPS: 60 | OBJECT: V_DRONE</div>
-    <div id="screamer"><img src="v.png.png"></div>
-    <canvas id="c"></canvas>
-
-<script>
-const canvas = document.getElementById("c");
-const ctx = canvas.getContext("2d");
-const vSprite = new Image(); vSprite.src = "v.png.png";
-
-let isGameRunning = false;
-let mobileMode = false;
-
-function startGame() {
-    document.getElementById('menu').style.display = 'none';
-    isGameRunning = true;
-    if ('ontouchstart' in window) {
-        mobileMode = true;
-        document.getElementById('joystick').style.display = 'block';
+window.addEventListener('touchstart', (e) => {
+    // Если тап в правой части экрана — запоминаем начало свайпа
+    if (e.touches[0].clientX > window.innerWidth / 2) {
+        touchStartX = e.touches[0].clientX;
     }
-    // Разблокировка звука
-    window.speechSynthesis.speak(new SpeechSynthesisUtterance(""));
-}
-
-function screamSound() {
-    window.speechSynthesis.cancel();
-    const msg = new SpeechSynthesisUtterance("I FOUND YOU!");
-    msg.pitch = 0.3; msg.rate = 1.0;
-    window.speechSynthesis.speak(msg);
-}
-
-const map = [
-    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-    [1,0,0,0,0,0,1,0,0,0,0,0,0,0,1],
-    [1,0,1,1,1,0,1,0,1,1,1,1,1,0,1],
-    [1,0,1,0,0,0,0,0,0,0,1,0,0,0,1],
-    [1,0,1,0,1,1,1,1,1,0,1,0,1,1,1],
-    [1,0,0,0,1,2,1,0,0,0,0,0,0,0,1],
-    [1,1,1,0,1,1,1,0,1,1,1,1,1,0,1],
-    [1,0,0,0,0,0,0,0,1,0,0,0,0,0,1],
-    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
-];
-
-const cellSize = 64;
-let p = { x: 90, y: 90, a: 0, s: 2.5 }; 
-let e = { x: 500, y: 300, s: 0.9, stuck: 0, lastX: 0 }; 
-let frame = 0;
-
-// УПРАВЛЕНИЕ ДЛЯ ПК
-const keys = {};
-window.onkeydown = (ev) => keys[ev.code] = true;
-window.onkeyup = (ev) => keys[ev.code] = false;
-
-// УПРАВЛЕНИЕ ДЛЯ МОБИЛЫ
-let joyPos = { x: 0, y: 0, active: false };
-const joyBox = document.getElementById('joystick');
-const stick = document.getElementById('stick');
-
-window.addEventListener('touchstart', (ev) => {
-    if (ev.touches[0].clientX > window.innerWidth / 2) joyPos.rotate = true;
 }, {passive: false});
 
-joyBox.addEventListener('touchstart', (e) => { joyPos.active = true; }, {passive: false});
 window.addEventListener('touchmove', (e) => {
-    if (!joyPos.active) {
-        // Поворот камеры тапом по правой части экрана
-        if (e.touches[0].clientX > window.innerWidth / 2) {
-            p.a += e.changedTouches[0].pageX > window.innerWidth/2 ? 0.05 : -0.05;
-        }
-        return;
+    // КРИТИЧНО: Запрещаем браузеру двигать страницу
+    if (e.cancelable) e.preventDefault();
+
+    if (joyPos.active) {
+        let rect = joyBox.getBoundingClientRect();
+        let touch = Array.from(e.touches).find(t => t.clientX < window.innerWidth / 2) || e.touches[0];
+        let dx = touch.clientX - (rect.left + 50);
+        let dy = touch.clientY - (rect.top + 50);
+        let angle = Math.atan2(dy, dx);
+        let dist = Math.min(Math.sqrt(dx*dx + dy*dy), 40);
+        joyPos.x = Math.cos(angle) * (dist / 40);
+        joyPos.y = Math.sin(angle) * (dist / 40);
+        stick.style.transform = `translate(${joyPos.x * 30}px, ${joyPos.y * 30}px)`;
     }
-    let rect = joyBox.getBoundingClientRect();
-    let touch = e.touches[0];
-    let dx = touch.clientX - (rect.left + 50);
-    let dy = touch.clientY - (rect.top + 50);
-    let angle = Math.atan2(dy, dx);
-    let dist = Math.min(Math.sqrt(dx*dx + dy*dy), 40);
-    joyPos.x = Math.cos(angle) * (dist / 40);
-    joyPos.y = Math.sin(angle) * (dist / 40);
-    stick.style.transform = `translate(${joyPos.x * 30}px, ${joyPos.y * 30}px)`;
+
+    // Плавный поворот камеры (справа)
+    for (let t of e.touches) {
+        if (t.clientX > window.innerWidth / 2) {
+            if (touchStartX !== null) {
+                let diffX = t.clientX - touchStartX;
+                p.a += diffX * 0.007; // Чувствительность поворота
+                touchStartX = t.clientX;
+            }
+        }
+    }
 }, {passive: false});
 
-window.addEventListener('touchend', () => { joyPos.active = false; joyPos.x = 0; joyPos.y = 0; stick.style.transform = `translate(0,0)`; });
-
-function isWall(x, y) {
-    let mx = Math.floor(x / cellSize), my = Math.floor(y / cellSize);
-    return !map[my] || map[my][mx] === 1;
-}
-
-function update() {
-    if (!isGameRunning) return;
-    frame++;
-
-    let dx = 0, dy = 0;
-    // ПК
-    if (keys['KeyW']) { dx += Math.cos(p.a); dy += Math.sin(p.a); }
-    if (keys['KeyS']) { dx -= Math.cos(p.a); dy -= Math.sin(p.a); }
-    // Мобила (джойстик)
-    if (joyPos.active) {
-        dx = Math.cos(p.a) * -joyPos.y + Math.cos(p.a + Math.PI/2) * joyPos.x;
-        dy = Math.sin(p.a) * -joyPos.y + Math.sin(p.a + Math.PI/2) * joyPos.x;
+window.addEventListener('touchend', (e) => {
+    if (e.touches.length === 0) {
+        joyPos.active = false;
+        joyPos.x = 0; joyPos.y = 0;
+        stick.style.transform = `translate(0,0)`;
+        touchStartX = null;
     }
-
-    if (!isWall(p.x + dx * p.s * 4, p.y)) p.x += dx * p.s;
-    if (!isWall(p.x, p.y + dy * p.s * 4)) p.y += dy * p.s;
-
-    // ИИ Ви
-    let edx = p.x - e.x, edy = p.y - e.y;
-    let dist = Math.sqrt(edx*edx + edy*edy);
-    let vx = (edx/dist) * e.s, vy = (edy/dist) * e.s;
-
-    if (Math.abs(e.x - e.lastX) < 0.1) e.stuck++; else e.stuck = 0;
-    e.lastX = e.x;
-    if (e.stuck > 20) { vx += (Math.random()-0.5)*5; vy += (Math.random()-0.5)*5; }
-
-    if (!isWall(e.x + vx * 15, e.y + vy * 15)) { e.x += vx; e.y += vy; }
-    else {
-        if (!isWall(e.x + vx * 15, e.y)) e.x += vx;
-        if (!isWall(e.x, e.y + vy * 15)) e.y += vy;
-    }
-
-    if (dist < 45) {
-        screamSound();
-        document.getElementById('screamer').style.display = 'block';
-        setTimeout(() => { document.getElementById('screamer').style.display='none'; p.x=90; p.y=90; }, 1500);
-    }
-}
-
-function draw() {
-    ctx.fillStyle = "#000"; ctx.fillRect(0, 0, canvas.width, canvas.height);
-    const rays = 100, fov = Math.PI/3;
-    for (let i = 0; i < rays; i++) {
-        let a = (p.a - fov/2) + (i * fov/rays);
-        let d = 0, type = 0;
-        while (d < 800) {
-            d += 4;
-            let tx = p.x + Math.cos(a)*d, ty = p.y + Math.sin(a)*d;
-            type = map[Math.floor(ty/cellSize)][Math.floor(tx/cellSize)];
-            if (type === 1 || type === 2) break;
-        }
-        let z = d * Math.cos(a - p.a);
-        let h = (cellSize * canvas.height) / (z + 0.1);
-        ctx.fillStyle = (type === 2) ? "#0f0" : `rgb(${Math.min(150, 8000/z)}, 5, 5)`;
-        ctx.fillRect(i * (canvas.width/rays), (canvas.height-h)/2, (canvas.width/rays)+1, h);
-    }
-
-    let aV = Math.atan2(e.y-p.y, e.x-p.x) - p.a;
-    while(aV < -Math.PI) aV += Math.PI*2; while(aV > Math.PI) aV -= Math.PI*2;
-    if (Math.abs(aV) < fov) {
-        let dV = Math.sqrt((p.x-e.x)**2 + (p.y-e.y)**2);
-        let hV = (cellSize * canvas.height) / (dV * Math.cos(aV) + 0.1) * 0.8;
-        let xV = (aV/fov + 0.5) * canvas.width - hV/2;
-        ctx.save();
-        ctx.translate(xV + hV/2, canvas.height/2);
-        ctx.rotate(Math.sin(frame * 0.1) * 0.05);
-        ctx.drawImage(vSprite, -hV/2, -hV/2, hV, hV);
-        ctx.restore();
-    }
-}
-
-function loop() { update(); draw(); requestAnimationFrame(loop); }
-canvas.width = window.innerWidth; canvas.height = window.innerHeight;
-loop();
-</script>
-</body>
-</html>
+});
