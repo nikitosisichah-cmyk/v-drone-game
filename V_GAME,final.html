@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>V MURDER DRONE - ULTIMATE</title>
+    <style>
+        body { margin: 0; background: #000; color: #fff; overflow: hidden; font-family: sans-serif; touch-action: none; }
+        canvas { display: block; width: 100vw; height: 100vh; }
+        #menu { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle, #300, #000); z-index: 200; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        .btn { padding: 20px 50px; background: red; color: white; border: none; font-size: 25px; cursor: pointer; font-weight: bold; border-radius: 10px; }
+        #joystick { position: absolute; bottom: 50px; left: 50px; width: 120px; height: 120px; background: rgba(255,255,255,0.1); border-radius: 50%; z-index: 100; border: 2px solid rgba(255,0,0,0.3); }
+        #stick { position: absolute; top: 35px; left: 35px; width: 50px; height: 50px; background: red; border-radius: 50%; box-shadow: 0 0 15px red; }
+        #ui { position: absolute; top: 15px; left: 15px; z-index: 50; background: rgba(0,0,0,0.5); padding: 10px; border-left: 4px solid red; pointer-events: none; }
+        #screamer { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 300; background: #000; }
+        #screamer img { width: 100%; height: 100%; object-fit: contain; }
+    </style>
+</head>
+<body>
+
+    <div id="menu">
+        <h1 style="color:red; font-size: 40px; text-shadow: 0 0 15px red;">MURDER DRONE: V</h1>
+        <button class="btn" onclick="startGame()">ИГРАТЬ (START)</button>
+    </div>
+
+    <div id="ui">УРОВЕНЬ: <span id="lvl">1</span><br>ЦЕЛЬ: НАЙДИ ЗЕЛЕНЫЙ СВЕТ</div>
+    <div id="joystick"><div id="stick"></div></div>
+    <div id="screamer"><img src="v.png.png"></div>
+    <canvas id="c"></canvas>
+
+<script>
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
+const vSprite = new Image(); vSprite.src = "v.png.png";
+
+let isGameRunning = false;
+let currentLevel = 1;
+let frame = 0;
+
+// Карты уровней
+const maps = [
+    [ // Уровень 1
+        [1,1,1,1,1,1,1,1,1,1],
+        [1,0,0,0,1,0,0,0,2,1],
+        [1,0,1,0,1,0,1,1,1,1],
+        [1,0,1,0,0,0,0,0,0,1],
+        [1,0,1,1,1,1,1,1,0,1],
+        [1,0,0,0,0,0,0,0,0,1],
+        [1,1,1,1,1,1,1,1,1,1]
+    ],
+    [ // Уровень 2 (Сложнее)
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+        [1,0,0,0,1,0,0,0,0,0,0,0,0,0,1],
+        [1,0,1,0,1,0,1,1,1,1,1,1,1,0,1],
+        [1,0,1,0,0,0,1,0,0,0,0,0,1,0,1],
+        [1,0,1,1,1,1,1,0,1,1,1,0,1,0,1],
+        [1,0,0,0,0,0,0,0,1,2,1,0,0,0,1],
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+    ]
+];
+
+const cellSize = 64;
+let p = { x: 96, y: 96, a: 0, s: 2.8 }; 
+let e = { x: 400, y: 200, s: 1.1, angle: 0 }; 
+let joy = { x: 0, y: 0, active: false };
+let touchStartX = null;
+
+function startGame() {
+    document.getElementById('menu').style.display = 'none';
+    isGameRunning = true;
+    window.speechSynthesis.speak(new SpeechSynthesisUtterance("")); // Разрешаем звук
+}
+
+function playLaugh() {
+    window.speechSynthesis.cancel();
+    const laughs = ["A-HA-HA-HA-HA!", "I'M GONNA KILL YOU!", "SWEET DREAMS!"];
+    const msg = new SpeechSynthesisUtterance(laughs[Math.floor(Math.random()*laughs.length)]);
+    msg.pitch = 0.2; msg.rate = 1.3; msg.volume = 1;
+    window.speechSynthesis.speak(msg);
+}
+
+// МОБИЛЬНОЕ УПРАВЛЕНИЕ (ИСПРАВЛЕНО)
+canvas.addEventListener('touchstart', (e) => {
+    for(let t of e.touches) {
+        if (t.clientX > window.innerWidth / 2) touchStartX = t.clientX;
+    }
+}, {passive: false});
+
+document.getElementById('joystick').addEventListener('touchstart', (e) => {
+    joy.active = true;
+}, {passive: false});
+
+window.addEventListener('touchmove', (e) => {
+    if (e.cancelable) e.preventDefault();
+    for(let t of e.touches) {
+        // Правая часть - поворот
+        if (t.clientX > window.innerWidth / 2) {
+            if (touchStartX !== null) {
+                p.a += (t.clientX - touchStartX) * 0.008;
+                touchStartX = t.clientX;
+            }
+        }
+        // Левая часть - джойстик
+        if (joy.active && t.clientX < window.innerWidth / 2) {
+            let jRect = document.getElementById('joystick').getBoundingClientRect();
+            let dx = t.clientX - (jRect.left + 60);
+            let dy = t.clientY - (jRect.top + 60);
+            let dist = Math.min(Math.sqrt(dx*dx + dy*dy), 40);
+            let angle = Math.atan2(dy, dx);
+            joy.x = Math.cos(angle) * (dist / 40);
+            joy.y = Math.sin(angle) * (dist / 40);
+            document.getElementById('stick').style.transform = `translate(${joy.x*35}px, ${joy.y*35}px)`;
+        }
+    }
+}, {passive: false});
+
+window.addEventListener('touchend', () => {
+    joy.active = false; joy.x = 0; joy.y = 0;
+    document.getElementById('stick').style.transform = `translate(0,0)`;
+    touchStartX = null;
+});
+
+function isWall(x, y) {
+    let map = maps[currentLevel-1];
+    let mx = Math.floor(x / cellSize), my = Math.floor(y / cellSize);
+    return !map[my] || map[my][mx] === 1;
+}
+
+function update() {
+    if (!isGameRunning) return;
+    frame++;
+
+    // Движение игрока
+    let dx = Math.cos(p.a) * -joy.y + Math.cos(p.a + Math.PI/2) * joy.x;
+    let dy = Math.sin(p.a) * -joy.y + Math.sin(p.a + Math.PI/2) * joy.x;
+    
+    if (!isWall(p.x + dx * p.s * 4, p.y)) p.x += dx * p.s;
+    if (!isWall(p.x, p.y + dy * p.s * 4)) p.y += dy * p.s;
+
+    // ИИ ВИ (Умный обход стен)
+    let edx = p.x - e.x, edy = p.y - e.y;
+    let dist = Math.sqrt(edx*edx + edy*edy);
+    let targetAngle = Math.atan2(edy, edx);
+    
+    let vx = Math.cos(targetAngle) * e.s;
+    let vy = Math.sin(targetAngle) * e.s;
+
+    // Если впереди стена, Ви пробует "прощупать" путь сбоку
+    if (isWall(e.x + vx * 20, e.y + vy * 20)) {
+        let altAngle1 = targetAngle + Math.PI/3;
+        let altAngle2 = targetAngle - Math.PI/3;
+        if (!isWall(e.x + Math.cos(altAngle1)*20, e.y + Math.sin(altAngle1)*20)) {
+            vx = Math.cos(altAngle1)*e.s; vy = Math.sin(altAngle1)*e.s;
+        } else {
+            vx = Math.cos(altAngle2)*e.s; vy = Math.sin(altAngle2)*e.s;
+        }
+    }
+    e.x += vx; e.y += vy;
+
+    // Про
